@@ -1,0 +1,6 @@
+SPDXVersion: SPDX-2.0
+DataLicense: CC0-1.0
+PackageName: census2-prototype
+PackageOriginator: Linux Foundation
+PackageHomePage: https://github.com/coreinfrastructure/census2-prototype
+PackageLicenseDeclared: MIT

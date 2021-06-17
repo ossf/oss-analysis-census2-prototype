@@ -1,0 +1,133 @@
+/* Immediately below is the Google BigQuery Query that was run in order
+to obtain the file repo_contributors_1yr.csv.  If you would like to run this
+in the future you should adjust the selected tables for the desired month
+range:
+
+--
+
+SELECT
+  repo.name as repo_name,
+  actor.login as author
+FROM
+  [githubarchive:month.201710],
+  [githubarchive:month.201709],
+  [githubarchive:month.201708],
+  [githubarchive:month.201707],
+  [githubarchive:month.201706],
+  [githubarchive:month.201705],
+  [githubarchive:month.201704],
+  [githubarchive:month.201703],
+  [githubarchive:month.201702],
+  [githubarchive:month.201701],
+  [githubarchive:month.201612],
+  [githubarchive:month.201611],
+  [githubarchive:month.201610]
+WHERE
+  type = 'PushEvent'
+  OR
+  (type = 'PullRequestEvent' and payload like '{"action":"opened"%')
+GROUP BY
+  repo_name,
+  author
+
+--
+
+The rest of this file has various queries that can help to calculate the
+riskiest projects It assumes that the score_repos.sql command has been run.
+
+The commands immediately below will create a temporary scoring table for the
+filtered_runtime_counts dependency count table and then get the top 20
+riskiest projects out of the top 200 most used projects for each package
+manager
+
+To increase the sample size change: limit_pm and limit_sm_rank values below.
+*/
+
+Create temp table frc_sm_scores AS(
+  SELECT
+    d.id,
+    d.dep_id,
+    left(d.dep_name, 40) as dep_name,
+    d.dep_count,
+    d.platform,
+    (sm1.score + sm2.score + sm3.score
+     + sm4.score + sm5.score + sm6.score) AS score
+  FROM
+    filtered_runtime_counts d
+    JOIN sm_contrib_file sm1
+      ON d.dep_id = sm1.project_id
+    JOIN sm_contribs_1yr sm2
+      ON d.dep_id = sm2.project_id
+    JOIN sm_homepage sm3
+      ON d.dep_id = sm3.project_id
+    JOIN sm_last_commit sm4
+      ON sm4.project_id = d.dep_id
+    JOIN sm_license sm5
+      ON sm5.project_id = d.dep_id
+    JOIN sm_unmaintained sm6
+      ON sm6.project_id = d.dep_id
+);
+
+drop table if exists frc_sm_scores_top;
+create table frc_sm_scores_top
+(
+  pm_rank int,
+  id int,
+  dep_id int,
+  dep_name text,
+  dep_count int,
+  platform text,
+  score int
+);
+\set limit_pm 200
+\set limit_sm_rank 20
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'Haxelib' order by id limit :limit_pm) as p1 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'Elm' order by id  limit :limit_pm) as p2 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'Carthage' order by id  limit :limit_pm) as p3 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'Maven' order by id  limit :limit_pm) as p4 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'Shards' order by id  limit :limit_pm) as p5 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'Clojars' order by id  limit :limit_pm) as p6 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'Meteor' order by id  limit :limit_pm) as p7 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'CocoaPods' order by id  limit :limit_pm) as p9 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'Bower' order by id  limit :limit_pm) as p10 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'NPM' and dep_name not like 'lodash.%' order by id  limit :limit_pm) as p11 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'Rubygems' order by id  limit :limit_pm) as p12 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'Hex' order by id  limit :limit_pm) as p13 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'Julia' order by id  limit :limit_pm) as p13 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'Packagist' order by id  limit :limit_pm) as p14 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'CPAN' order by id  limit :limit_pm) as p15 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'Atom' order by id  limit :limit_pm) as p16 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'Go' order by id  limit :limit_pm) as p17 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'Pub' order by id  limit :limit_pm) as p18 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'Cargo' order by id  limit :limit_pm) as p19 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'NuGet' order by id  limit :limit_pm) as p20 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'Pypi' order by id  limit :limit_pm) as p21 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'Dub' order by id  limit :limit_pm) as p22 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'SwiftPM' order by id  limit :limit_pm) as p23 order by score desc, id limit :limit_sm_rank;
+insert into frc_sm_scores_top select * from (select row_number() over (order by id) as pm_rank, * from frc_sm_scores where platform = 'CRAN' order by id  limit :limit_pm) as p24 order by score desc, id limit :limit_sm_rank;
+
+
+-- This is an example of how to get score components from the "riskiest" projects on a package manager, in this case NuGet
+select
+  d.*,
+  sm1.score as c_file,
+  sm2.score as c1yr,
+  sm3.score as homepage,
+  sm4.score as ctime,
+  sm5.score as license,
+  sm6.score as unmaintained
+from
+  frc_sm_scores_top d
+  JOIN sm_contrib_file sm1
+      ON d.dep_id = sm1.project_id
+    JOIN sm_contribs_1yr sm2
+      ON d.dep_id = sm2.project_id
+    JOIN sm_homepage sm3
+      ON d.dep_id = sm3.project_id
+    JOIN sm_last_commit sm4
+      ON sm4.project_id = d.dep_id
+    JOIN sm_license sm5
+      ON sm5.project_id = d.dep_id
+    JOIN sm_unmaintained sm6
+      ON sm6.project_id = d.dep_id
+where d.platform = 'NuGet' order by d.score desc, d.id;

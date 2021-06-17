@@ -1,0 +1,74 @@
+First we want to create a table with all the of the repos we want to keep.
+The following command will create a table from the repos table with all of
+repos that meet our "preserve" criteria.
+
+## "Preserve Group" is created with:
+
+create table repos_to_keep as (select distinct r.repo_id, r.repo_name from repos r left join projects p on r.repo_id = p.repo_id where (stars >50 or watchers >50 or fork_count > 20 or contributors >50 or p.project_id is not null));
+alter table repos_to_keep add primary key (repo_id);
+create index on repos_to_keep (repo_name);
+
+
+## Things to throw away
+
+* (c1) Forks Count<2 (nobody forks it) & Watchers Count<=5 & Stars Count<=10   (good to have wont use for now as this is too harsh
+
+  - create table c1 as (select distinct r.repo_id, r.repo_name from repos r left join repos_to_keep rtk on rtk.repo_id = r.repo_id where (r.fork_count <2 and r.watchers <=5 and r.stars <=10 and rtk.repo_id is null));
+alter table c1 add primary key (repo_id);
+create index on c1 (repo_name);
+
+* (c2) Forks Count=0 (nobody forks it) & Watchers Count<=2 & Stars Count<=2
+
+  - create table c2 as (select distinct r.repo_id, r.repo_name from repos r left join repos_to_keep rtk on rtk.repo_id = r.repo_id where (r.fork_count =0 and r.watchers <=2 and r.stars <=2 and rtk.repo_id is null));
+alter table c2 add primary key (repo_id);
+create index on c2 (repo_name);
+
+* (c3) Open Issues count < 3
+  - create table c3 as (select distinct r.repo_id, r.repo_name from repos r left join repos_to_keep rtk on rtk.repo_id = r.repo_id where (r.open_issues_count < 3 and rtk.repo_id is null));
+alter table c3 add primary key (repo_id);
+create index on c3 (repo_name);
+
+* (c4) Homepage url empty:
+
+  - create table c4 as (select distinct r.repo_id, r.repo_name from repos r left join repos_to_keep rtk on rtk.repo_id = r.repo_id where (where r.homepage is null and rtk.repo_id is null));
+alter table c4 add primary key (repo_id);
+create index on c4 (repo_name);
+
+* (c5) Fork non-empty and forkeee in preserve group:
+
+  - create table c5 as (select distinct r.repo_id, r.repo_name from repos r join repos_to_keep rtk on r.fork_source = rtk.repo_name left join repos_to_keep rtk2 on rtk2.repo_id = r.repo_id where rtk2.repo_id is null);
+alter table c5 add primary key (repo_id);
+create index on c5 (repo_name);
+
+* (c6) (Updated Timestamp - Created Timestamp) a semester length AND more than a year old later per Updated Timestamp:
+
+  - create table c6 as (select r.repo_id, r.repo_name from repos r left join repos_to_keep rtk on rtk.repo_id = r.repo_id where (r.last_pushed_at - r.created_at < '6 months'::interval and age(r.last_pushed_at) > '1 year'::interval and rtk.repo_id is null));
+alter table c6 add primary key (repo_id);
+create index on c6 (repo_name);
+
+* (c7) No license and no license file:
+
+  - create table c7 as (select r.repo_id, r.repo_name from repos r left join repos_to_keep rtk on rtk.repo_id = r.repo_id where (license is null and license_name is null and rtk.repo_id is null));
+alter table c7 add primary key (repo_id);
+create index on c7 (repo_name);
+
+
+## Create scoring table:
+
+create table scores as (select r.repo_id, r.repo_name, (case when c1.repo_id is not null then 1 else 0 end) as c1s, (case when c2.repo_id is not null then 1 else 0 end) as c2s, (case when c3.repo_id is not null then 1 else 0 end) as c3s, (case when c4.repo_id is not null then 1 else 0 end) as c4s, (case when c5.repo_id is not null then 1 else 0 end) as c5s, (case when c6.repo_id is not null then 1 else 0 end) as c6s, (case when c7.repo_id is not null then 1 else 0 end) as c7s from repos r full outer join c1 on c1.repo_id = r.repo_id full outer join c2 on c2.repo_id = r.repo_id full outer join c3 on c3.repo_id = r.repo_id full outer join c4 on c4.repo_id = r.repo_id full outer join c5 on c5.repo_id = r.repo_id full outer join c6 on c6.repo_id = r.repo_id full outer join c7 on c7.repo_id = r.repo_id);
+alter table scores add primary key (repo_id);
+create index on scores (repo_name);
+create index on scores (c1s);
+create index on scores (c2s);
+create index on scores (c3s);
+create index on scores (c4s);
+create index on scores (c5s);
+create index on scores (c6s);
+create index on scores (c7s);
+
+## Output and view scores:
+
+select repo_id, left(repo_name,35) as repo_name ,  c2s,c3s,c4s,c5s,c6s,c7s, (c2s+c3s+c4s+c5s+c6s+c7s) as total from scores where (c2s+c3s+c4s+c5s+c6s+c7s) >= 4 order by total;
+
+
+drop for analysis

@@ -1,0 +1,1 @@
+\copy (SELECT DISTINCT d.project_id, p.repo_id, d.dep_id, d.project, '' AS repo_name, d.dep_name FROM dependencies d JOIN projects p ON d.project_id = p.project_id ORDER BY d.project_id, d.dep_id) to './project-full_deps.csv' csv header
